@@ -11,20 +11,9 @@ from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
 import calendar
-from sqlalchemy import create_engine, text
-from urllib.parse import urlparse
 
-@st.cache_data
-def load_data():
-    """
-    Connects to the database, queries all necessary sales data,
-    and returns it as a cleaned pandas DataFrame.
-    This function is cached to avoid re-running the query on every interaction.
-    """
-    # Using TURSO_DATABASE_URL as per the new connection method.
-    # Make sure your .env file or environment has this variable set.
-    db_url = os.getenv("TURSO_DB_URL")
-    auth_token = os.getenv("TURSO_AUTH_TOKEN")
+url = os.getenv("TURSO_DB_URL")
+auth_token = os.getenv("TURSO_AUTH_TOKEN")
 
     if not db_url or not auth_token:
         st.error("TURSO_DB_URL and TURSO_AUTH_TOKEN must be set in environment variables.")
