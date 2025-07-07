@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 from datetime import datetime
 import plotly.express as px
+import plotly.graph_objects as go
 import calendar
 
 url = os.getenv("TURSO_DB_URL")
@@ -83,3 +84,74 @@ fig = px.line(
 fig.update_traces(line_color='deepskyblue', marker=dict(size=8, color='orange'))
 
 st.plotly_chart(fig, use_container_width=True)
+
+# --- Stacked Histogram per SERIES ---
+
+# Query for SERIES data (remove LIMIT for full data)
+series_query = """
+SELECT 
+    fixdate, 
+    SERIES,
+    STRFTIME('%Y', fixdate) AS year,
+    STRFTIME('%m', fixdate) AS month
+FROM LAPJUAL
+"""
+series_rows = conn.execute(series_query).fetchall()
+
+# Convert to DataFrame
+series_df = pd.DataFrame(series_rows, columns=["fixdate", "SERIES", "year", "month"])
+
+# Ensure fixdate is datetime and drop NaT
+series_df["fixdate"] = pd.to_datetime(series_df["fixdate"], errors="coerce")
+series_df = series_df.dropna(subset=["fixdate"])
+
+# Filter data by selected year and month
+series_filtered_df = series_df[
+    (series_df["year"] == selected_year) &
+    (series_df["month"] == selected_month)
+].copy()
+
+# Get number of days in selected month/year
+series_filtered_df["day"] = series_filtered_df["fixdate"].dt.day
+all_days = pd.DataFrame({'day': range(1, num_days + 1)})
+all_series = series_filtered_df["SERIES"].unique()
+
+# Count SERIES per day
+daily_series_counts = (
+    series_filtered_df.groupby(["day", "SERIES"])
+    .size()
+    .reset_index(name="count")
+)
+
+# Ensure every day and every series is present
+full_index = pd.MultiIndex.from_product(
+    [range(1, num_days + 1), all_series], names=["day", "SERIES"]
+)
+daily_series_counts = daily_series_counts.set_index(["day", "SERIES"]).reindex(full_index, fill_value=0).reset_index()
+
+# Plotly stacked bar chart
+fig2 = px.bar(
+    daily_series_counts,
+    x="day",
+    y="count",
+    color="SERIES",
+    title=f"Stacked Histogram Penjualan per SERIES {selected_year}-{selected_month}",
+    labels={"day": "Tgl", "count": "Total Jual"},
+    template="plotly_dark"
+)
+fig2.update_layout(barmode='stack')
+
+# --- Overlay previous daily NO.MEMO total as a line ---
+fig2.add_trace(
+    go.Scatter(
+        x=daily_counts["day"],
+        y=daily_counts["count"],
+        mode="lines+markers",
+        name="Total NO.MEMO",
+        line=dict(color="deepskyblue", width=3),
+        marker=dict(size=8, color="orange"),
+        yaxis="y"
+    )
+)
+
+st.plotly_chart(fig2, use_container_width=True)
