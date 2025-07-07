@@ -76,7 +76,7 @@ fig = px.line(
     x="day",
     y="count",
     markers=True,
-    title=f"Total Penjualan {selected_year}-{selected_month}",
+    title=f"Graphic Penjualan {selected_year}-{selected_month}",
     labels={"day": "Tgl", "count": "Total Jual"},
     template="plotly_dark"
 )
