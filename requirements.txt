@@ -1,0 +1,6 @@
+libsql
+pandas
+streamlit
+matplotlib
+seaborn
+plotly
