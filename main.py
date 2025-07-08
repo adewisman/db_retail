@@ -65,6 +65,8 @@ def load_data():
         st.error(f"Failed to connect or query database: {e}")
         st.stop()
 
+st.set_page_config(layout="wide")
+
 st.title("Dashboard Penjualan")
 
 df = load_data()
@@ -109,45 +111,93 @@ daily_series_counts = (
 )
 
 # Ensure every day and every series is present
-full_index = pd.MultiIndex.from_product(
+full_series_index = pd.MultiIndex.from_product(
     [range(1, num_days + 1), all_series], names=["day", "SERIES"]
 )
-daily_series_counts = daily_series_counts.set_index(["day", "SERIES"]).reindex(full_index, fill_value=0).reset_index()
+daily_series_counts = daily_series_counts.set_index(["day", "SERIES"]).reindex(full_series_index, fill_value=0).reset_index()
+
+# Calculate daily counts per segment
+all_segment = filtered_df["SEGMENT"].unique()
+
+# Count SEGMENT per day
+daily_segment_counts = (
+    filtered_df.groupby(["day", "SEGMENT"])
+    .size()
+    .reset_index(name="count")
+)
+
+# Ensure every day and every segment is present data container
+full_segment_index = pd.MultiIndex.from_product(
+    [range(1, num_days + 1), all_segment], names=["day", "SEGMENT"]
+)
+daily_segment_counts = daily_segment_counts.set_index(["day", "SEGMENT"]).reindex(full_segment_index, fill_value=0).reset_index()
 
 # --- Display Metrics and Charts ---
 st.metric(f"Total Penjualan {selected_year}-{selected_month}", f"{daily_counts['count'].sum():,}")
 
-# Plotly interactive line chart with tooltips
-fig = px.line(
-    daily_counts,
-    x="day",
-    y="count",
-    markers=True,
-    title=f"Graphic Penjualan Harian - {selected_year}-{selected_month}",
-    labels={"day": "Tanggal", "count": "Total Penjualan"},
-    template="plotly_dark"
-)
-fig.update_traces(line_color='deepskyblue', marker=dict(size=8, color='orange'))
+chart_col1, chart_col2 = st.columns(2)
 
-st.plotly_chart(fig, use_container_width=True)
+with chart_col1:
+    # Plotly interactive line chart with tooltips
+    fig_daily = px.line(
+        daily_counts,
+        x="day",
+        y="count",
+        markers=True,
+        title=f"Graphic Penjualan Harian - {selected_year}-{selected_month}",
+        labels={"day": "Tanggal", "count": "Total Penjualan"},
+        template="plotly_dark",
+    )
+    fig_daily.update_traces(line_color="deepskyblue", marker=dict(size=8, color="orange"))
+    st.plotly_chart(fig_daily, use_container_width=True)
 
-# --- Stacked Histogram per SERIES ---
-st.header("Penjualan Berdasarkan Series")
+with chart_col2:
+    # --- Stacked Histogram per SERIES ---
+    st.header("Penjualan Berdasarkan Series")
+
+    # Plotly stacked bar chart
+    fig_series = px.bar(
+        daily_series_counts,
+        x="day",
+        y="count",
+        color="SERIES",
+        title=f"Stacked Histogram Penjualan per SERIES {selected_year}-{selected_month}",
+        labels={"day": "Tanggal", "count": "Total Penjualan"},
+        template="plotly_dark",
+    )
+    fig_series.update_layout(barmode="stack")
+
+    # --- Overlay previous daily NO.MEMO total as a line ---
+    fig_series.add_trace(
+        go.Scatter(
+            x=daily_counts["day"],
+            y=daily_counts["count"],
+            mode="lines+markers",
+            name="Total NO.MEMO",
+            line=dict(color="deepskyblue", width=3),
+            marker=dict(size=8, color="orange"),
+            yaxis="y",
+        )
+    )
+    st.plotly_chart(fig_series, use_container_width=True)
+
+# --- Stacked Histogram per SEGMENT (on a new row) ---
+st.header("Penjualan Berdasarkan SEGMENT")
 
 # Plotly stacked bar chart
-fig2 = px.bar(
-    daily_series_counts,
+fig_segment = px.bar(
+    daily_segment_counts,
     x="day",
     y="count",
-    color="SERIES",
-    title=f"Stacked Histogram Penjualan per SERIES {selected_year}-{selected_month}",
+    color="SEGMENT",
+    title=f"Stacked Histogram Penjualan per SEGMENT {selected_year}-{selected_month}",
     labels={"day": "Tanggal", "count": "Total Penjualan"},
-    template="plotly_dark"
+    template="plotly_dark",
 )
-fig2.update_layout(barmode='stack')
+fig_segment.update_layout(barmode="stack")
 
 # --- Overlay previous daily NO.MEMO total as a line ---
-fig2.add_trace(
+fig_segment.add_trace(
     go.Scatter(
         x=daily_counts["day"],
         y=daily_counts["count"],
@@ -155,8 +205,7 @@ fig2.add_trace(
         name="Total NO.MEMO",
         line=dict(color="deepskyblue", width=3),
         marker=dict(size=8, color="orange"),
-        yaxis="y"
+        yaxis="y",
     )
 )
-
-st.plotly_chart(fig2, use_container_width=True)
+st.plotly_chart(fig_segment, use_container_width=True)
