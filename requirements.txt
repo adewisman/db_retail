@@ -4,3 +4,5 @@ streamlit
 matplotlib
 seaborn
 plotly
+sqlalchemy-libsql
+python-dotenv

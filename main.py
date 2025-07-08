@@ -1,42 +1,75 @@
 import os
-import libsql
+from dotenv import load_dotenv
+
+# Load environment variables from .env file at the very beginning
+# to ensure they are available for all subsequent modules.
+load_dotenv()
+
 import pandas as pd
 import streamlit as st
 from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
 import calendar
+from sqlalchemy import create_engine, text
+from urllib.parse import urlparse
 
-url = os.getenv("TURSO_DB_URL")
-auth_token = os.getenv("TURSO_AUTH_TOKEN")
+@st.cache_data
+def load_data():
+    """
+    Connects to the database, queries all necessary sales data,
+    and returns it as a cleaned pandas DataFrame.
+    This function is cached to avoid re-running the query on every interaction.
+    """
+    # Using TURSO_DATABASE_URL as per the new connection method.
+    # Make sure your .env file or environment has this variable set.
+    db_url = os.getenv("TURSO_DB_URL")
+    auth_token = os.getenv("TURSO_AUTH_TOKEN")
 
-if not url or not auth_token:
-    raise EnvironmentError("TURSO_DATABASE_URL and TURSO_AUTH_TOKEN must be set in environment variables.")
+    if not db_url or not auth_token:
+        st.error("TURSO_DB_URL and TURSO_AUTH_TOKEN must be set in environment variables.")
+        st.stop()
 
-conn = libsql.connect(url, auth_token=auth_token)
+    try:
+        # The original code constructed the URL incorrectly, leading to the error:
+        # "Can't load plugin: sqlalchemy.dialects:sqlite.https"
+        # This happens because the connection string becomes "sqlite+https://..."
+        # The correct format is "dialect+driver://host".
+        # For Turso, the dialect is "sqlite" and the driver is "libsql".
+        # We need to extract the hostname from the full URL provided in the env var.
+        hostname = urlparse(db_url).netloc
 
-# Query all data
-query = """
-SELECT 
-    fixdate, 
-    "NO.MEMO",
-    STRFTIME('%Y', fixdate) AS year,
-    STRFTIME('%m', fixdate) AS month
-FROM LAPJUAL
-"""
-rows = conn.execute(query).fetchall()
+        engine = create_engine(
+            f"sqlite+libsql://{hostname}?secure=true",
+            connect_args={"auth_token": auth_token},
+        )
 
-# Convert to DataFrame
-df = pd.DataFrame(rows, columns=["fixdate", "NO.MEMO", "year", "month"])
+        with engine.connect() as conn:
+            query = text("SELECT * FROM LAPJUAL")
+            result_set = conn.execute(query)
+            rows = result_set.fetchall()
+            # For SQLAlchemy Result object, use .keys() to get column names
+            df = pd.DataFrame(rows, columns=result_set.keys())
 
-# Ensure fixdate is datetime and drop NaT
-df["fixdate"] = pd.to_datetime(df["fixdate"], errors="coerce")
-df = df.dropna(subset=["fixdate"])
+        # Ensure fixdate is datetime and drop NaT
+        df["fixdate"] = pd.to_datetime(df["fixdate"], errors="coerce")
+        df = df.dropna(subset=["fixdate"])
+        # Manually create year, month, and day columns from fixdate
+        # as they are no longer in the SQL query.
+        df["year"] = df["fixdate"].dt.strftime('%Y')
+        df["month"] = df["fixdate"].dt.strftime('%m')
+        df["day"] = df["fixdate"].dt.day
 
-# Streamlit app
-st.title("Total Penjualan Daily")
+        return df
+    except Exception as e:
+        st.error(f"Failed to connect or query database: {e}")
+        st.stop()
 
-# Generate year and month LOV from data
+st.title("Dashboard Penjualan")
+
+df = load_data()
+
+# --- UI Controls ---
 years = sorted(df["year"].unique())
 months = [f"{m:02d}" for m in range(1, 13)]
 
@@ -46,79 +79,31 @@ with col1:
 with col2:
     selected_month = st.selectbox("Select Month", months, index=datetime.now().month-1)
 
-# Filter data by selected year and month
+# --- Filter Data ---
 filtered_df = df[
     (df["year"] == selected_year) &
     (df["month"] == selected_month)
-]
+].copy()
 
-# Show total count for the selected month at the top
-st.write(f"Total Penjualan {selected_year}-{selected_month}: {filtered_df['NO.MEMO'].count()}")
-
-# st.subheader(f"{selected_year}-{selected_month}")
-
-# Get number of days in selected month/year
+# --- Calculations ---
 year_int = int(selected_year)
 month_int = int(selected_month)
 num_days = calendar.monthrange(year_int, month_int)[1]
+
+# Create a complete dataframe for all days in the month
 all_days = pd.DataFrame({'day': range(1, num_days + 1)})
 
-# Count NO.MEMO per day
-daily_counts = filtered_df.groupby(filtered_df["fixdate"].dt.day)["NO.MEMO"].count().reset_index()
-daily_counts.rename(columns={"fixdate": "day", "NO.MEMO": "count"}, inplace=True)
-
-# Merge with all days to ensure every day is present
+# Calculate total daily counts
+daily_counts = filtered_df.groupby("day")["NO.MEMO"].count().reset_index(name="count")
 daily_counts = all_days.merge(daily_counts, on="day", how="left").fillna(0)
 daily_counts["count"] = daily_counts["count"].astype(int)
 
-# Plotly interactive line chart with tooltips
-fig = px.line(
-    daily_counts,
-    x="day",
-    y="count",
-    markers=True,
-    title=f"Graphic Penjualan {selected_year}-{selected_month}",
-    labels={"day": "Tgl", "count": "Total Jual"},
-    template="plotly_dark"
-)
-fig.update_traces(line_color='deepskyblue', marker=dict(size=8, color='orange'))
-
-st.plotly_chart(fig, use_container_width=True)
-
-# --- Stacked Histogram per SERIES ---
-
-# Query for SERIES data (remove LIMIT for full data)
-series_query = """
-SELECT 
-    fixdate, 
-    SERIES,
-    STRFTIME('%Y', fixdate) AS year,
-    STRFTIME('%m', fixdate) AS month
-FROM LAPJUAL
-"""
-series_rows = conn.execute(series_query).fetchall()
-
-# Convert to DataFrame
-series_df = pd.DataFrame(series_rows, columns=["fixdate", "SERIES", "year", "month"])
-
-# Ensure fixdate is datetime and drop NaT
-series_df["fixdate"] = pd.to_datetime(series_df["fixdate"], errors="coerce")
-series_df = series_df.dropna(subset=["fixdate"])
-
-# Filter data by selected year and month
-series_filtered_df = series_df[
-    (series_df["year"] == selected_year) &
-    (series_df["month"] == selected_month)
-].copy()
-
-# Get number of days in selected month/year
-series_filtered_df["day"] = series_filtered_df["fixdate"].dt.day
-all_days = pd.DataFrame({'day': range(1, num_days + 1)})
-all_series = series_filtered_df["SERIES"].unique()
+# Calculate daily counts per series
+all_series = filtered_df["SERIES"].unique()
 
 # Count SERIES per day
 daily_series_counts = (
-    series_filtered_df.groupby(["day", "SERIES"])
+    filtered_df.groupby(["day", "SERIES"])
     .size()
     .reset_index(name="count")
 )
@@ -129,6 +114,26 @@ full_index = pd.MultiIndex.from_product(
 )
 daily_series_counts = daily_series_counts.set_index(["day", "SERIES"]).reindex(full_index, fill_value=0).reset_index()
 
+# --- Display Metrics and Charts ---
+st.metric(f"Total Penjualan {selected_year}-{selected_month}", f"{daily_counts['count'].sum():,}")
+
+# Plotly interactive line chart with tooltips
+fig = px.line(
+    daily_counts,
+    x="day",
+    y="count",
+    markers=True,
+    title=f"Graphic Penjualan Harian - {selected_year}-{selected_month}",
+    labels={"day": "Tanggal", "count": "Total Penjualan"},
+    template="plotly_dark"
+)
+fig.update_traces(line_color='deepskyblue', marker=dict(size=8, color='orange'))
+
+st.plotly_chart(fig, use_container_width=True)
+
+# --- Stacked Histogram per SERIES ---
+st.header("Penjualan Berdasarkan Series")
+
 # Plotly stacked bar chart
 fig2 = px.bar(
     daily_series_counts,
@@ -136,7 +141,7 @@ fig2 = px.bar(
     y="count",
     color="SERIES",
     title=f"Stacked Histogram Penjualan per SERIES {selected_year}-{selected_month}",
-    labels={"day": "Tgl", "count": "Total Jual"},
+    labels={"day": "Tanggal", "count": "Total Penjualan"},
     template="plotly_dark"
 )
 fig2.update_layout(barmode='stack')
