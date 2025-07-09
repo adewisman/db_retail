@@ -132,6 +132,22 @@ full_segment_index = pd.MultiIndex.from_product(
 )
 daily_segment_counts = daily_segment_counts.set_index(["day", "SEGMENT"]).reindex(full_segment_index, fill_value=0).reset_index()
 
+# Calculate daily counts per tipeunit
+all_tipeunit = filtered_df["TIPEUNIT"].unique()
+
+# Count TIPEUNIT per day
+daily_tipeunit_counts = (
+    filtered_df.groupby(["day", "TIPEUNIT"])
+    .size()
+    .reset_index(name="count")
+)
+
+# Ensure every day and every tipeunit is present
+full_tipeunit_index = pd.MultiIndex.from_product(
+    [range(1, num_days + 1), all_tipeunit], names=["day", "TIPEUNIT"]
+)
+daily_tipeunit_counts = daily_tipeunit_counts.set_index(["day", "TIPEUNIT"]).reindex(full_tipeunit_index, fill_value=0).reset_index()
+
 # --- Display Metrics and Charts ---
 st.metric(f"Total Penjualan {selected_year}-{selected_month}", f"{daily_counts['count'].sum():,}")
 
@@ -181,31 +197,64 @@ with chart_col2:
     )
     st.plotly_chart(fig_series, use_container_width=True)
 
-# --- Stacked Histogram per SEGMENT (on a new row) ---
-st.header("Penjualan Berdasarkan SEGMENT")
+chart_col3, chart_col4 = st.columns(2)
 
-# Plotly stacked bar chart
-fig_segment = px.bar(
-    daily_segment_counts,
-    x="day",
-    y="count",
-    color="SEGMENT",
-    title=f"Stacked Histogram Penjualan per SEGMENT {selected_year}-{selected_month}",
-    labels={"day": "Tanggal", "count": "Total Penjualan"},
-    template="plotly_dark",
-)
-fig_segment.update_layout(barmode="stack")
+with chart_col3:
+    # --- Stacked Histogram per SEGMENT ---
+    st.header("Penjualan Berdasarkan SEGMENT")
 
-# --- Overlay previous daily NO.MEMO total as a line ---
-fig_segment.add_trace(
-    go.Scatter(
-        x=daily_counts["day"],
-        y=daily_counts["count"],
-        mode="lines+markers",
-        name="Total NO.MEMO",
-        line=dict(color="deepskyblue", width=3),
-        marker=dict(size=8, color="orange"),
-        yaxis="y",
+    # Plotly stacked bar chart
+    fig_segment = px.bar(
+        daily_segment_counts,
+        x="day",
+        y="count",
+        color="SEGMENT",
+        title=f"Stacked Histogram Penjualan per SEGMENT {selected_year}-{selected_month}",
+        labels={"day": "Tanggal", "count": "Total Penjualan"},
+        template="plotly_dark",
     )
-)
-st.plotly_chart(fig_segment, use_container_width=True)
+    fig_segment.update_layout(barmode="stack")
+
+    # --- Overlay previous daily NO.MEMO total as a line ---
+    fig_segment.add_trace(
+        go.Scatter(
+            x=daily_counts["day"],
+            y=daily_counts["count"],
+            mode="lines+markers",
+            name="Total NO.MEMO",
+            line=dict(color="deepskyblue", width=3),
+            marker=dict(size=8, color="orange"),
+            yaxis="y",
+        )
+    )
+    st.plotly_chart(fig_segment, use_container_width=True)
+
+with chart_col4:
+    # --- Stacked Histogram per TIPEUNIT ---
+    st.header("Penjualan Berdasarkan TIPEUNIT")
+
+    # Plotly stacked bar chart
+    fig_tipeunit = px.bar(
+        daily_tipeunit_counts,
+        x="day",
+        y="count",
+        color="TIPEUNIT",
+        title=f"Stacked Histogram Penjualan per TIPEUNIT {selected_year}-{selected_month}",
+        labels={"day": "Tanggal", "count": "Total Penjualan"},
+        template="plotly_dark",
+    )
+    fig_tipeunit.update_layout(barmode="stack")
+
+    # --- Overlay previous daily NO.MEMO total as a line ---
+    fig_tipeunit.add_trace(
+        go.Scatter(
+            x=daily_counts["day"],
+            y=daily_counts["count"],
+            mode="lines+markers",
+            name="Total NO.MEMO",
+            line=dict(color="deepskyblue", width=3),
+            marker=dict(size=8, color="orange"),
+            yaxis="y",
+        )
+    )
+    st.plotly_chart(fig_tipeunit, use_container_width=True)
