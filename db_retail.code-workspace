@@ -4,5 +4,8 @@
 			"path": "."
 		}
 	],
-	"settings": {}
+	"settings": {
+		"geminicodeassist.chat.defaultCodeBlockDisplay": "Expanded",
+		"geminicodeassist.updateChannel": "Default"
+	}
 }

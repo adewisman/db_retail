@@ -39,6 +39,16 @@ def set_bg_from_local(image_file):
         unsafe_allow_html=True
     )
 # Initialize CryptContext
+
+    # Hide the sidebar
+    st.markdown(
+        """
+        <style>
+            section[data-testid="stSidebar"] {display: none;}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 # This must match the settings in hash_password.py
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -101,6 +111,13 @@ if not st.session_state["authentication_status"]:
     set_bg_from_local(os.path.join(".streamlit", "bg-login.jpg"))
     st.title("Retail Daya App")
     login_form()
+
+    # Hide the main menu
+    st.markdown("""
+        <style>
+            [data-testid="collapsedControl"] { display: none }
+        </style>
+    """, unsafe_allow_html=True)
 else:
     # If authenticated, show the main app content
     st.title("Welcome to the Retail Daya App!")
