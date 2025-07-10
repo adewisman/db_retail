@@ -109,7 +109,7 @@ if "authentication_status" not in st.session_state:
 # If not authenticated, show the login form
 if not st.session_state["authentication_status"]:
     set_bg_from_local(os.path.join(".streamlit", "bg-login.jpg"))
-    st.title("Retail Daya App")
+    st.title("Dashbord Retail")
     login_form()
 
     # Hide the main menu
