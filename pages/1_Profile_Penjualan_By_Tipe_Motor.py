@@ -82,79 +82,99 @@ months = [f"{m:02d}" for m in range(1, 13)]
 
 col1, col2 = st.columns(2)
 with col1:
-    selected_year = st.selectbox("Select Year", years, index=len(years)-1)
+    selected_year = st.selectbox("Select Year", years, index=len(years) - 1)
 with col2:
-    selected_month = st.selectbox("Select Month", months, index=datetime.now().month-1)
+    selected_month = st.selectbox(
+        "Select Month", months, index=datetime.now().month - 1
+    )
+
+# Determine the number of days in the selected month
+year_int = int(selected_year)
+month_int = int(selected_month)
+num_days_in_month = calendar.monthrange(year_int, month_int)[1]
+
+# Add day range selectors
+col3, col4 = st.columns(2)
+with col3:
+    start_day = st.number_input(
+        "Start Day", min_value=1, max_value=num_days_in_month, value=1
+    )
+with col4:
+    end_day = st.number_input(
+        "End Day", min_value=1, max_value=num_days_in_month, value=num_days_in_month
+    )
 
 # --- Filter Data ---
-filtered_df = df[
-    (df["year"] == selected_year) &
-    (df["month"] == selected_month)
+# Filter by year and month first
+monthly_df = df[
+    (df["year"] == selected_year) & (df["month"] == selected_month)
+].copy()
+
+# Then, filter by the selected day range
+filtered_df = monthly_df[
+    (monthly_df["day"] >= start_day) & (monthly_df["day"] <= end_day)
 ].copy()
 
 # --- Calculations ---
-year_int = int(selected_year)
-month_int = int(selected_month)
-num_days = calendar.monthrange(year_int, month_int)[1]
-
-# Create a complete dataframe for all days in the month
-all_days = pd.DataFrame({'day': range(1, num_days + 1)})
+# Create a complete dataframe for the selected day range
+all_days_in_range = pd.DataFrame({"day": range(start_day, end_day + 1)})
 
 # Calculate total daily counts
-daily_counts = filtered_df.groupby("day")["NO.MEMO"].count().reset_index(name="count")
-daily_counts = all_days.merge(daily_counts, on="day", how="left").fillna(0)
+daily_counts = (
+    filtered_df.groupby("day")["NO.MEMO"].count().reset_index(name="count")
+)
+daily_counts = all_days_in_range.merge(
+    daily_counts, on="day", how="left"
+).fillna(0)
 daily_counts["count"] = daily_counts["count"].astype(int)
 
 # Calculate daily counts per series
 all_series = filtered_df["SERIES"].unique()
-
-# Count SERIES per day
+full_series_index = pd.MultiIndex.from_product(
+    [range(start_day, end_day + 1), all_series], names=["day", "SERIES"]
+)
 daily_series_counts = (
     filtered_df.groupby(["day", "SERIES"])
     .size()
     .reset_index(name="count")
+    .set_index(["day", "SERIES"])
+    .reindex(full_series_index, fill_value=0)
+    .reset_index()
 )
-
-# Ensure every day and every series is present
-full_series_index = pd.MultiIndex.from_product(
-    [range(1, num_days + 1), all_series], names=["day", "SERIES"]
-)
-daily_series_counts = daily_series_counts.set_index(["day", "SERIES"]).reindex(full_series_index, fill_value=0).reset_index()
 
 # Calculate daily counts per segment
 all_segment = filtered_df["SEGMENT"].unique()
-
-# Count SEGMENT per day
+full_segment_index = pd.MultiIndex.from_product(
+    [range(start_day, end_day + 1), all_segment], names=["day", "SEGMENT"]
+)
 daily_segment_counts = (
     filtered_df.groupby(["day", "SEGMENT"])
     .size()
     .reset_index(name="count")
+    .set_index(["day", "SEGMENT"])
+    .reindex(full_segment_index, fill_value=0)
+    .reset_index()
 )
-
-# Ensure every day and every segment is present data container
-full_segment_index = pd.MultiIndex.from_product(
-    [range(1, num_days + 1), all_segment], names=["day", "SEGMENT"]
-)
-daily_segment_counts = daily_segment_counts.set_index(["day", "SEGMENT"]).reindex(full_segment_index, fill_value=0).reset_index()
 
 # Calculate daily counts per tipeunit
 all_tipeunit = filtered_df["TIPEUNIT"].unique()
-
-# Count TIPEUNIT per day
+full_tipeunit_index = pd.MultiIndex.from_product(
+    [range(start_day, end_day + 1), all_tipeunit], names=["day", "TIPEUNIT"]
+)
 daily_tipeunit_counts = (
     filtered_df.groupby(["day", "TIPEUNIT"])
     .size()
     .reset_index(name="count")
+    .set_index(["day", "TIPEUNIT"])
+    .reindex(full_tipeunit_index, fill_value=0)
+    .reset_index()
 )
-
-# Ensure every day and every tipeunit is present
-full_tipeunit_index = pd.MultiIndex.from_product(
-    [range(1, num_days + 1), all_tipeunit], names=["day", "TIPEUNIT"]
-)
-daily_tipeunit_counts = daily_tipeunit_counts.set_index(["day", "TIPEUNIT"]).reindex(full_tipeunit_index, fill_value=0).reset_index()
 
 # --- Display Metrics and Charts ---
-st.metric(f"Total Penjualan {selected_year}-{selected_month}", f"{daily_counts['count'].sum():,}")
+st.metric(
+    f"Total Penjualan ({selected_year}-{selected_month}, Day {start_day}-{end_day})",
+    f"{daily_counts['count'].sum():,}",
+)
 
 chart_col1, chart_col2 = st.columns(2)
 
@@ -165,7 +185,7 @@ with chart_col1:
         x="day",
         y="count",
         markers=True,
-        title=f"Graphic Penjualan Harian - {selected_year}-{selected_month}",
+        title=f"Graphic Penjualan Harian - {selected_year}-{selected_month} (Day {start_day}-{end_day})",
         labels={"day": "Tanggal", "count": "Total Penjualan"},
         template="plotly_dark",
     )
@@ -182,7 +202,7 @@ with chart_col2:
         x="day",
         y="count",
         color="SERIES",
-        title=f"Stacked Histogram Penjualan per SERIES {selected_year}-{selected_month}",
+        title=f"Stacked Histogram Penjualan per SERIES - {selected_year}-{selected_month} (Day {start_day}-{end_day})",
         labels={"day": "Tanggal", "count": "Total Penjualan"},
         template="plotly_dark",
     )
@@ -214,7 +234,7 @@ with chart_col3:
         x="day",
         y="count",
         color="SEGMENT",
-        title=f"Stacked Histogram Penjualan per SEGMENT {selected_year}-{selected_month}",
+        title=f"Stacked Histogram Penjualan per SEGMENT - {selected_year}-{selected_month} (Day {start_day}-{end_day})",
         labels={"day": "Tanggal", "count": "Total Penjualan"},
         template="plotly_dark",
     )
@@ -244,7 +264,7 @@ with chart_col4:
         x="day",
         y="count",
         color="TIPEUNIT",
-        title=f"Stacked Histogram Penjualan per TIPEUNIT {selected_year}-{selected_month}",
+        title=f"Stacked Histogram Penjualan per TIPEUNIT - {selected_year}-{selected_month} (Day {start_day}-{end_day})",
         labels={"day": "Tanggal", "count": "Total Penjualan"},
         template="plotly_dark",
     )
