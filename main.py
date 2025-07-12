@@ -17,8 +17,8 @@ def set_background(image_filename):
     Sets a background image for the Streamlit app from the static folder.
     Also adds custom CSS for the login form.
     """
-    # The URL for static files is '/app/static/<filename>'
-    image_url = f"/app/static/{image_filename}"
+    # The URL for static files is '/static/<filename>'
+    image_url = f"/static/{image_filename}"
 
     # We should still check if the file exists to provide a helpful error.
     if not os.path.exists(f"static/{image_filename}"):
