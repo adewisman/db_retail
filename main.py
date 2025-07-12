@@ -12,23 +12,28 @@ st.set_page_config(page_title="Login", layout="wide", initial_sidebar_state="exp
 # if you have a `pages/` directory. We are using our own navigation logic.
 st.set_option("client.showSidebarNavigation", False)
 
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
 def set_background(image_filename):
     """
     Sets a background image for the Streamlit app from the static folder.
     Also adds custom CSS for the login form.
     """
-    # The URL for static files is '/static/<filename>'
-    image_url = f"/static/{image_filename}"
-
-    # We should still check if the file exists to provide a helpful error.
-    if not os.path.exists(f"static/{image_filename}"):
-        st.error(f"Background image not found at static/{image_filename}")
+    image_path = os.path.join("static", image_filename)
+    if not os.path.exists(image_path):
+        st.error(f"Background image not found at {image_path}")
         return
+
+    image_base64 = get_base64_of_bin_file(image_path)
+    
     st.markdown(
         f"""
         <style>
         .stApp {{
-            background-image: url({image_url});
+            background-image: url("data:image/jpg;base64,{image_base64}");
             background-size: cover;
         }}
         div[data-testid="stForm"] {{
