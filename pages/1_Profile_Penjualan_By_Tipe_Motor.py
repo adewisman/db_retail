@@ -1,9 +1,3 @@
-import os
-from dotenv import load_dotenv
-
-# Load environment variables from .env file at the very beginning
-# to ensure they are available for all subsequent modules.
-load_dotenv()
 
 import pandas as pd
 import streamlit as st
@@ -26,13 +20,12 @@ def load_data():
     and returns it as a cleaned pandas DataFrame.
     This function is cached to avoid re-running the query on every interaction.
     """
-    # Using TURSO_DATABASE_URL as per the new connection method.
-    # Make sure your .env file or environment has this variable set.
-    db_url = os.getenv("TURSO_DB_URL")
-    auth_token = os.getenv("TURSO_AUTH_TOKEN")
+    # Using TURSO_DATABASE_URL from Streamlit secrets.
+    db_url = st.secrets["TURSO_DB_URL"]
+    auth_token = st.secrets["TURSO_AUTH_TOKEN"]
 
     if not db_url or not auth_token:
-        st.error("TURSO_DB_URL and TURSO_AUTH_TOKEN must be set in environment variables.")
+        st.error("TURSO_DB_URL and TURSO_AUTH_TOKEN must be set in .streamlit/secrets.toml.")
         st.stop()
 
     try:
