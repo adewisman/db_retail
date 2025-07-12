@@ -2,3 +2,4 @@
 .venv
 db_retail.code-workspace.streamlit
 .streamlit/secrets.toml
+hash_password.py
