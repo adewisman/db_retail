@@ -80,39 +80,36 @@ df = load_data()
 years = sorted(df["year"].unique())
 months = [f"{m:02d}" for m in range(1, 13)]
 
-col1, col2 = st.columns(2)
-with col1:
-    selected_year = st.selectbox("Select Year", years, index=len(years) - 1)
-with col2:
+row1_col1, row1_col2, row1_col3 = st.columns([1, 1, 2])
+
+with row1_col1:
+    selected_year = st.selectbox("Year", years, index=len(years) - 1)
+
+with row1_col2:
     selected_month = st.selectbox(
-        "Select Month", months, index=datetime.now().month - 1
+        "Month", months, index=datetime.now().month - 1
     )
 
 # Determine the number of days in the selected month
 year_int = int(selected_year)
 month_int = int(selected_month)
 num_days_in_month = calendar.monthrange(year_int, month_int)[1]
+day_options = list(range(1, num_days_in_month + 1))
 
-# Add day range selectors
-col3, col4 = st.columns(2)
-with col3:
-    start_day = st.number_input(
-        "Start Day", min_value=1, max_value=num_days_in_month, value=1
-    )
-with col4:
-    end_day = st.number_input(
-        "End Day", min_value=1, max_value=num_days_in_month, value=num_days_in_month
+with row1_col3:
+    start_day, end_day = st.select_slider(
+        "Select Day Range",
+        options=day_options,
+        value=(1, num_days_in_month)
     )
 
 # --- Filter Data ---
-# Filter by year and month first
-monthly_df = df[
-    (df["year"] == selected_year) & (df["month"] == selected_month)
-].copy()
-
-# Then, filter by the selected day range
-filtered_df = monthly_df[
-    (monthly_df["day"] >= start_day) & (monthly_df["day"] <= end_day)
+# Filter by year, month, and day range
+filtered_df = df[
+    (df["year"] == selected_year) &
+    (df["month"] == selected_month) &
+    (df["day"] >= start_day) &
+    (df["day"] <= end_day)
 ].copy()
 
 # --- Calculations ---
@@ -170,7 +167,14 @@ daily_tipeunit_counts = (
     .reset_index()
 )
 
+# --- Heatmap Calculations ---
+heatmap_data = filtered_df.groupby(['NAMASALESFORCE', 'SERIES']).size().reset_index(name='count')
+heatmap_pivot = heatmap_data.pivot(index='NAMASALESFORCE', columns='SERIES', values='count').fillna(0)
+
 # --- Display Metrics and Charts ---
+# Set the plotly template based on the session state theme
+plotly_template = "plotly_dark" if st.session_state.get("theme", "light") == "dark" else "plotly_white"
+
 st.metric(
     f"Total Penjualan ({selected_year}-{selected_month}, Day {start_day}-{end_day})",
     f"{daily_counts['count'].sum():,}",
@@ -187,7 +191,7 @@ with chart_col1:
         markers=True,
         title=f"Graphic Penjualan Harian - {selected_year}-{selected_month} (Day {start_day}-{end_day})",
         labels={"day": "Tanggal", "count": "Total Penjualan"},
-        template="plotly_dark",
+        template=plotly_template,
     )
     fig_daily.update_traces(line_color="deepskyblue", marker=dict(size=8, color="orange"))
     st.plotly_chart(fig_daily, use_container_width=True)
@@ -204,7 +208,7 @@ with chart_col2:
         color="SERIES",
         title=f"Stacked Histogram Penjualan per SERIES - {selected_year}-{selected_month} (Day {start_day}-{end_day})",
         labels={"day": "Tanggal", "count": "Total Penjualan"},
-        template="plotly_dark",
+        template=plotly_template,
     )
     fig_series.update_layout(barmode="stack")
 
@@ -236,7 +240,7 @@ with chart_col3:
         color="SEGMENT",
         title=f"Stacked Histogram Penjualan per SEGMENT - {selected_year}-{selected_month} (Day {start_day}-{end_day})",
         labels={"day": "Tanggal", "count": "Total Penjualan"},
-        template="plotly_dark",
+        template=plotly_template,
     )
     fig_segment.update_layout(barmode="stack")
 
@@ -266,7 +270,7 @@ with chart_col4:
         color="TIPEUNIT",
         title=f"Stacked Histogram Penjualan per TIPEUNIT - {selected_year}-{selected_month} (Day {start_day}-{end_day})",
         labels={"day": "Tanggal", "count": "Total Penjualan"},
-        template="plotly_dark",
+        template=plotly_template,
     )
     fig_tipeunit.update_layout(barmode="stack")
 
@@ -283,3 +287,43 @@ with chart_col4:
         )
     )
     st.plotly_chart(fig_tipeunit, use_container_width=True)
+
+# --- Heatmap Chart ---
+st.header("Salesforce Performance Heatmap")
+
+with st.expander("Filter Salesforce"):
+    # Get the list of salespersons for the filter
+    salesforce_options = sorted(heatmap_pivot.index.unique())
+    selected_salesforce = st.multiselect(
+        "Select Salesforce to Display",
+        options=salesforce_options,
+        default=salesforce_options  # Default to all selected
+    )
+
+# Filter the pivot table based on selection
+if selected_salesforce:
+    filtered_heatmap_pivot = heatmap_pivot.loc[selected_salesforce]
+else:
+    # If nothing is selected, create an empty dataframe with the same columns
+    filtered_heatmap_pivot = pd.DataFrame(columns=heatmap_pivot.columns)
+
+
+# Display the heatmap only if there is data
+if not filtered_heatmap_pivot.empty:
+    fig_heatmap = px.imshow(
+        filtered_heatmap_pivot,
+        text_auto=True,
+        aspect="auto",
+        labels=dict(x="SERIES", y="NAMASALESFORCE", color="Total Penjualan"),
+        title="Heatmap Penjualan per Sales Force dan Series",
+        template=plotly_template
+    )
+    st.plotly_chart(fig_heatmap, use_container_width=True)
+
+    # --- Grand Total Table ---
+    st.write("---")
+    st.subheader("Grand Total per Series")
+    grand_total = filtered_heatmap_pivot.sum().to_frame('Grand Total').T
+    st.dataframe(grand_total, use_container_width=True)
+else:
+    st.warning("No data to display for the selected Salesforce.")

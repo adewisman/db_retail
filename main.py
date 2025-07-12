@@ -6,7 +6,7 @@ import os
 from streamlit_option_menu import option_menu
 
 # Set page configuration at the very top
-st.set_page_config(page_title="Login", layout="wide")
+st.set_page_config(page_title="Login", layout="wide", initial_sidebar_state="expanded")
 
 # This will prevent Streamlit from trying to create a sidebar navigation
 # if you have a `pages/` directory. We are using our own navigation logic.
@@ -100,10 +100,10 @@ def login_form():
 # Initialize session state if not already done
 if "authentication_status" not in st.session_state:
     st.session_state["authentication_status"] = False
-if "menu_visible" not in st.session_state:
-    st.session_state.menu_visible = True
 if "selected_option" not in st.session_state:
     st.session_state.selected_option = "Sales Overview"
+if "theme" not in st.session_state:
+    st.session_state.theme = "light"
 
 # If not authenticated, show the login form
 if not st.session_state["authentication_status"]:
@@ -125,34 +125,38 @@ else:
         st.image("static/logo.png", width=100)
         st.success(f"Logged in as **{st.secrets.get('USERNAME', 'user')}**.")
 
-        if st.session_state.menu_visible:
-            options = ["Penjualan By Tipe Motor", "Inventory", "Customer Analytics"]
-            try:
-                # Set the default index to the last selected option
-                default_idx = options.index(st.session_state.selected_option)
-            except ValueError:
-                default_idx = 0
+        options = ["Penjualan By Tipe Motor", "Inventory", "Customer Analytics"]
+        try:
+            # Set the default index to the last selected option
+            default_idx = options.index(st.session_state.selected_option)
+        except ValueError:
+            default_idx = 0
 
-            selected = option_menu(
-                menu_title="Main Menu",  # required
-                options=options,
-                icons=["graph-up-arrow", "box-seam", "people"],  # optional
-                menu_icon="cast",  # optional
-                default_index=default_idx,
-            )
-            # Persist the selection in session state
-            st.session_state.selected_option = selected
-            st.button("Hide Menu", on_click=lambda: st.session_state.update(menu_visible=False), use_container_width=True)
-        else:
-            # When hidden, get the selection from session state
-            selected = st.session_state.selected_option
-            st.button("Show Menu", on_click=lambda: st.session_state.update(menu_visible=True), use_container_width=True)
+        selected = option_menu(
+            menu_title="Main Menu",  # required
+            options=options,
+            icons=["graph-up-arrow", "box-seam", "people"],  # optional
+            menu_icon="cast",  # optional
+            default_index=default_idx,
+        )
+        # Persist the selection in session state
+        st.session_state.selected_option = selected
 
         st.button(
             "Logout",
             on_click=lambda: st.session_state.update(authentication_status=False),
             use_container_width=True,
         )
+
+        # Add theme selector
+        theme = st.selectbox("Choose a theme", ["light", "dark"], index=0 if st.session_state.theme == "light" else 1)
+        if theme != st.session_state.theme:
+            st.session_state.theme = theme
+            st.rerun()
+
+    # Apply the selected theme
+    st._config.set_option("theme.base", st.session_state.theme)
+
 
     # Display content based on selection
     if selected == "Penjualan By Tipe Motor":
