@@ -1,5 +1,5 @@
 .env
 .venv
-.db_retail.code-workspace.streamlit
+./db_retail.code-workspace.streamlit
 .streamlit/secrets.toml
-.hash_password.py
+./hash_password.py
