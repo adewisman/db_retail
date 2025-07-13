@@ -110,6 +110,10 @@ if "selected_option" not in st.session_state:
 if "theme" not in st.session_state:
     st.session_state.theme = "light"
 
+# Apply the selected theme
+st._config.set_option("theme.base", st.session_state.theme)
+
+
 # If not authenticated, show the login form
 if not st.session_state["authentication_status"]:
     set_background("bg-login.jpg")
@@ -158,10 +162,6 @@ else:
         if theme != st.session_state.theme:
             st.session_state.theme = theme
             st.rerun()
-
-    # Apply the selected theme
-    st._config.set_option("theme.base", st.session_state.theme)
-
 
     # Display content based on selection
     if selected == "Penjualan By Tipe Motor":
