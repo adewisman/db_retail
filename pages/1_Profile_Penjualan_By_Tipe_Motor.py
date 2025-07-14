@@ -63,10 +63,11 @@ def load_data():
         st.error(f"Failed to connect or query database: {e}")
         st.stop()
 
-st.set_page_config(layout="wide")
-
-st.title("Dashboard Penjualan")
-
+st.set_page_config(
+    page_title="Penjualan By Tipe",
+    page_icon="static/logo-icons.jpg",
+    layout="wide"  
+)
 df = load_data()
 
 # --- UI Controls ---
@@ -176,26 +177,35 @@ st.metric(
 chart_col1, chart_col2 = st.columns(2)
 
 with chart_col1:
-    # Plotly interactive line chart with tooltips
-    fig_daily = px.line(
-        daily_counts,
-        x="day",
-        y="count",
-        markers=True,
-        title=f"Graphic Penjualan Harian - {selected_year}-{selected_month} (Day {start_day}-{end_day})",
-        labels={"day": "Tanggal", "count": "Total Penjualan"},
-        template=plotly_template,
-    )
-    fig_daily.update_traces(line_color="deepskyblue", marker=dict(size=8, color="orange"))
-    st.plotly_chart(fig_daily, use_container_width=True)
+    # Display a message if there is no data, otherwise show the chart
+    if daily_counts['count'].sum() == 0:
+        st.info("No sales data for the selected period.")
+    else:
+        # Plotly interactive line chart with tooltips
+        fig_daily = px.line(
+            daily_counts,
+            x="day",
+            y="count",
+            markers=True,
+            title=f"Graphic Penjualan Harian - {selected_year}-{selected_month} (Day {start_day}-{end_day})",
+            labels={"day": "Tanggal", "count": "Total Penjualan"},
+            template=plotly_template,
+        )
+        fig_daily.update_traces(line_color="deepskyblue", marker=dict(size=8, color="orange"))
+        st.plotly_chart(fig_daily, use_container_width=True)
 
 with chart_col2:
     # --- Stacked Histogram per SERIES ---
     st.header("Penjualan Berdasarkan Series")
 
+    # Filter out series with no sales
+    series_total = daily_series_counts.groupby("SERIES")["count"].sum()
+    active_series = series_total[series_total > 0].index
+    filtered_series_counts = daily_series_counts[daily_series_counts["SERIES"].isin(active_series)]
+
     # Plotly stacked bar chart
     fig_series = px.bar(
-        daily_series_counts,
+        filtered_series_counts,
         x="day",
         y="count",
         color="SERIES",
@@ -225,9 +235,14 @@ with chart_col3:
     # --- Stacked Histogram per SEGMENT ---
     st.header("Penjualan Berdasarkan SEGMENT")
 
+    # Filter out segments with no sales
+    segment_total = daily_segment_counts.groupby("SEGMENT")["count"].sum()
+    active_segments = segment_total[segment_total > 0].index
+    filtered_segment_counts = daily_segment_counts[daily_segment_counts["SEGMENT"].isin(active_segments)]
+
     # Plotly stacked bar chart
     fig_segment = px.bar(
-        daily_segment_counts,
+        filtered_segment_counts,
         x="day",
         y="count",
         color="SEGMENT",
@@ -255,9 +270,14 @@ with chart_col4:
     # --- Stacked Histogram per TIPEUNIT ---
     st.header("Penjualan Berdasarkan TIPEUNIT")
 
+    # Filter out tipeunit with no sales
+    tipeunit_total = daily_tipeunit_counts.groupby("TIPEUNIT")["count"].sum()
+    active_tipeunits = tipeunit_total[tipeunit_total > 0].index
+    filtered_tipeunit_counts = daily_tipeunit_counts[daily_tipeunit_counts["TIPEUNIT"].isin(active_tipeunits)]
+
     # Plotly stacked bar chart
     fig_tipeunit = px.bar(
-        daily_tipeunit_counts,
+        filtered_tipeunit_counts,
         x="day",
         y="count",
         color="TIPEUNIT",
@@ -300,6 +320,10 @@ else:
     # If nothing is selected, create an empty dataframe with the same columns
     filtered_heatmap_pivot = pd.DataFrame(columns=heatmap_pivot.columns)
 
+# Hide columns where all values are zero
+if not filtered_heatmap_pivot.empty:
+    # Only select columns where the sum is not zero
+    filtered_heatmap_pivot = filtered_heatmap_pivot.loc[:, (filtered_heatmap_pivot.sum(axis=0) != 0)]
 
 # Display the heatmap only if there is data
 if not filtered_heatmap_pivot.empty:

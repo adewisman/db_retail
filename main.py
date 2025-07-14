@@ -6,7 +6,7 @@ import os
 from streamlit_option_menu import option_menu
 
 # Set page configuration at the very top
-st.set_page_config(page_title="Login", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="DB Daya Retail", layout="wide", page_icon="static/logo-icons.jpg", initial_sidebar_state="expanded")
 
 # This will prevent Streamlit from trying to create a sidebar navigation
 # if you have a `pages/` directory. We are using our own navigation logic.
