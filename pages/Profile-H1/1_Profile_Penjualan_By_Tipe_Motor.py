@@ -1,4 +1,3 @@
-
 import pandas as pd
 import streamlit as st
 from datetime import datetime
@@ -62,12 +61,6 @@ def load_data():
     except Exception as e:
         st.error(f"Failed to connect or query database: {e}")
         st.stop()
-
-st.set_page_config(
-    page_title="Penjualan By Tipe",
-    page_icon="static/logo-icons.jpg",
-    layout="wide"  
-)
 df = load_data()
 
 # --- UI Controls ---

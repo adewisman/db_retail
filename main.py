@@ -3,6 +3,7 @@ import streamlit as st
 from passlib.context import CryptContext
 import base64
 import os
+import re
 from streamlit_option_menu import option_menu
 
 # Set page configuration at the very top
@@ -49,6 +50,29 @@ def set_background(image_filename):
         """,
         unsafe_allow_html=True
     )
+
+def get_page_config():
+    """
+    Scans the 'pages' directory to build a nested dictionary of available pages.
+    The structure is { 'Category': { 'PageName': 'path/to/page.py' } }.
+    """
+    page_config = {}
+    pages_dir = "pages"
+    if not os.path.exists(pages_dir):
+        return page_config
+
+    for category in sorted(os.listdir(pages_dir)):
+        category_path = os.path.join(pages_dir, category)
+        if os.path.isdir(category_path):
+            page_config[category] = {}
+            for page_file in sorted(os.listdir(category_path)):
+                if page_file.endswith(".py") and not page_file.startswith("_"):
+                    page_name = os.path.splitext(page_file)[0]
+                    # Remove leading numbers/underscores, replace underscores with spaces
+                    page_name = re.sub(r"^\d+_", "", page_name).replace("_", " ")
+                    page_config[category][page_name] = os.path.join(category_path, page_file)
+    return page_config
+
 # This must match the settings in hash_password.py
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -102,11 +126,13 @@ def login_form():
 
 # --- Main Application Logic ---
 
-# Initialize session state if not already done
+# Initialize session state
 if "authentication_status" not in st.session_state:
-    st.session_state["authentication_status"] = False
-if "selected_option" not in st.session_state:
-    st.session_state.selected_option = "Sales Overview"
+    st.session_state.authentication_status = False
+if "selected_category" not in st.session_state:
+    st.session_state.selected_category = None
+if "selected_page" not in st.session_state:
+    st.session_state.selected_page = None
 if "theme" not in st.session_state:
     st.session_state.theme = "light"
 
@@ -128,56 +154,85 @@ if not st.session_state["authentication_status"]:
         </style>
     """, unsafe_allow_html=True)
 else:
-    # If authenticated, show the main app with vertical tab navigation in the sidebar
-    # This requires installing a new dependency: pip install streamlit-option-menu
+    # --- Dynamic Page Loading ---
+    page_config = get_page_config()
+    
+    if not page_config:
+        st.warning("No pages found. Please add pages to the 'pages' directory.")
+        st.stop()
+
+    # --- Sidebar Navigation ---
     with st.sidebar:
         st.image("static/logo.png", width=100)
         st.success(f"Logged in as **{st.secrets.get('USERNAME', 'user')}**.")
+        st.markdown("---")
 
-        options = ["Penjualan By Tipe Motor", "Inventory", "Customer Analytics"]
-        try:
-            # Set the default index to the last selected option
-            default_idx = options.index(st.session_state.selected_option)
-        except ValueError:
-            default_idx = 0
+        # Custom CSS for menu font sizes
+        st.markdown("""
+            <style>
+                [data-testid="stExpander"] summary {
+                    font-size: 18px !important;
+                    font-weight: bold !important;
+                }
+            </style>
+        """, unsafe_allow_html=True)
 
-        selected = option_menu(
-            menu_title="Main Menu",  # required
-            options=options,
-            icons=["graph-up-arrow", "box-seam", "people"],  # optional
-            menu_icon="cast",  # optional
-            default_index=default_idx,
-        )
-        # Persist the selection in session state
-        st.session_state.selected_option = selected
+        # Set default category and page if not set
+        if st.session_state.selected_category is None:
+            st.session_state.selected_category = list(page_config.keys())[0]
+        
+        # Check if the selected page is valid for the selected category
+        if st.session_state.selected_page is None or st.session_state.selected_page not in page_config[st.session_state.selected_category]:
+            st.session_state.selected_page = list(page_config[st.session_state.selected_category].keys())[0]
 
-        st.button(
-            "Logout",
-            on_click=lambda: st.session_state.update(authentication_status=False),
-            use_container_width=True,
-        )
+        for category, pages in page_config.items():
+            if not pages:
+                with st.expander(category, expanded=False):
+                    st.info("No pages in this category.")
+                continue
 
-        # Add theme selector
+            with st.expander(category, expanded=(st.session_state.selected_category == category)):
+                # Determine the default index for the option_menu
+                if st.session_state.selected_category == category:
+                    try:
+                        default_index = list(pages.keys()).index(st.session_state.selected_page)
+                    except ValueError:
+                        default_index = 0
+                else:
+                    default_index = 0
+                
+                selected = option_menu(
+                    None,
+                    options=list(pages.keys()),
+                    icons=["file-earmark-text" for _ in pages.keys()],
+                    default_index=default_index,
+                    key=f"menu_{category}",
+                    styles={
+                        "nav-link": {"font-size": "14px"}
+                    }
+                )
+
+                # If the selection has changed, update the state and rerun
+                if selected != st.session_state.selected_page or st.session_state.selected_category != category:
+                    st.session_state.selected_category = category
+                    st.session_state.selected_page = selected
+                    st.rerun()
+
+        # Logout and theme selector
+        st.markdown("---")
+        st.button("Logout", on_click=lambda: st.session_state.update(authentication_status=False), use_container_width=True)
         theme = st.selectbox("Choose a theme", ["light", "dark"], index=0 if st.session_state.theme == "light" else 1)
         if theme != st.session_state.theme:
             st.session_state.theme = theme
             st.rerun()
 
-    # Display content based on selection
-    if selected == "Penjualan By Tipe Motor":
-        #st.title(f"Viewing: {selected}")
-        #st.info("This is where the main sales overview dashboard would be displayed.")
-        # Embed the content of 1_Profile_Penjualan_By_Tipe_Motor.py here
-        exec(open("pages/Profile-H1/1_Profile_Penjualan_By_Tipe_Motor.py").read())
-
-    elif selected == "Inventory":
-        st.title(f"Viewing: {selected}")
-        st.info("This is where you would manage product inventory.")
-        # Add your inventory management components here
-        st.table({"Item": ["Laptops", "Monitors", "Keyboards"], "Stock": [50, 75, 200]})
-
-    elif selected == "Customer Analytics":
-        st.title(f"Viewing: {selected}")
-        st.info("This is where customer analytics and reports would be shown.")
-        # Add your customer analytics components here
-        st.bar_chart({"data": [10, 20, 5, 15]})
+    # --- Load and Display Page ---
+    if st.session_state.selected_category and st.session_state.selected_page:
+        page_path = page_config[st.session_state.selected_category][st.session_state.selected_page]
+        try:
+            with open(page_path, "r") as f:
+                exec(f.read(), globals())
+        except Exception as e:
+            st.error(f"Error loading page: {e}")
+    else:
+        st.info("Please select a page to continue.")
