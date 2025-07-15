@@ -168,7 +168,7 @@ else:
         #st.title(f"Viewing: {selected}")
         #st.info("This is where the main sales overview dashboard would be displayed.")
         # Embed the content of 1_Profile_Penjualan_By_Tipe_Motor.py here
-        exec(open("pages/1_Profile_Penjualan_By_Tipe_Motor.py").read())
+        exec(open("pages/Profile-H1/1_Profile_Penjualan_By_Tipe_Motor.py").read())
 
     elif selected == "Inventory":
         st.title(f"Viewing: {selected}")
